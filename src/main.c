@@ -9,15 +9,15 @@
 #include <display/text_input.h>
 
 #define INPUT_BUFFER_SIZE	65556
-static volatile bool s_active = 1;
+static volatile bool s_quit = 0;
 
 static inline void local_interrupt_handler(int sig) {
-	s_active = false;
+	s_quit = true;
 }
 
 int main(int argc, char** argv) {
 	signal(SIGINT, local_interrupt_handler);
-	s_active = true;
+	s_quit = false;
 	display_init();
 	display_move(0, 0);
 	InputState state;
@@ -26,11 +26,11 @@ int main(int argc, char** argv) {
 	ui_input_area_adjusted(state.ui, 1);
 	ui_clear_and_print(state.ui, "Welcome to the official LTTP client. Start by typing in the server name/address you wish to connect to.");
 	ui_print_command_prompt(state.ui, state.command, ">\0", " \0");
-	Notes* notes = notes_new(&s_active);
-	while (s_active) {
+	Notes* notes = notes_new(&s_quit);
+	while (!s_quit) {
 		if (text_input_read(&state, DKEY_RETURN) && text_input_get_len(state.command) > 0) {
 			if (strcmp(text_input_get_buffer(state.command), "exit") == 0) {
-				s_active = false;
+				s_quit = true;
 			} else if (strcmp(text_input_get_buffer(state.command), "create") == 0
 				|| strcmp(text_input_get_buffer(state.command), "new") == 0)
 			{

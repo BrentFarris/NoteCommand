@@ -4,6 +4,7 @@
 
 #include "notes.h"
 #include <stdio.h>
+#include <assert.h>
 #include <string.h>
 #include <stdlib.h>
 #include <db/query.h>
@@ -30,6 +31,7 @@ struct NotesQueryNode {
 typedef struct {
 	NotesQueryNode head;
 	NotesQueryNode* current;
+	int count;
 } NotesQueryList;
 
 static inline void local_notes_query_free(NotesQueryNode* query) {
@@ -103,7 +105,7 @@ void notes_select(Notes* notes, InputState* state, int32_t id) {
 	if (!err) {
 		sqlite3_bind_int(pStmt, 1, id);
 		if (sqlite3_step(pStmt) == SQLITE_ROW) {
-			NotesQueryNode q;
+			NotesQueryNode q = { .id = 0, .title = NULL, .body = NULL, .next = NULL };
 			q.id = sqlite3_column_int(pStmt, 0);
 			strclone((const char*)sqlite3_column_text(pStmt, 1), &q.title);
 			strclone((const char*)sqlite3_column_text(pStmt, 2), &q.body);
@@ -124,6 +126,7 @@ void notes_search(Notes* notes, InputState* state, const char* term) {
 		NotesQueryList* list = calloc(1, sizeof(*list));
 		list->current = &list->head;
 		while (sqlite3_step(pStmt) == SQLITE_ROW) {
+			list->count++;
 			list->current->id = sqlite3_column_int(pStmt, 0);
 			strclone((const char*)sqlite3_column_text(pStmt, 1), &list->current->title);
 			strclone((const char*)sqlite3_column_text(pStmt, 2), &list->current->body);
@@ -133,35 +136,41 @@ void notes_search(Notes* notes, InputState* state, const char* term) {
 		}
 		sqlite3_finalize(pStmt);
 		list->current = &list->head;
-		if (list->current->id <= 0)
+		if (list->count == 0)
 			ui_clear_and_print(state->ui, "Could not locate any matches");
-		else if (list->head.next == NULL || list->head.next->id <= 0) {
+		else if (list->count == 1) {
 			char output[4096];
 			snprintf(output, sizeof(output), "ID:    %d\nTitle: %s\n%s",
 				list->head.id, list->head.title, list->head.body);
 			ui_clear_and_print(state->ui, output);
 		} else {
 			// TODO:  Pick an option
-			char output[4096];
-			int offset = 0;
-			snprintf(output, sizeof(output), "Multiple entries found, pick an id...\n");
-			offset = (int)strlen(output);
-			while (list->current != NULL && list->current->id > 0 && offset+40 < (int)sizeof(output)) {
-				snprintf(output+offset, 40, "(%d) %s\n",
-					list->current->id, list->current->title);
-				offset = (int)strlen(output);
+			char buff[512];
+			int w, h;
+			display_get_rows_cols(&h, &w);
+			assert(sizeof(buff) >= w);
+			int idx = list->count - 1;
+			NotesQueryNode* reverse = malloc(sizeof(*reverse) * list->count);
+			ui_clear_and_print(state->ui, "Multiple entries found, pick an id...\n");
+			while (list->current != NULL && list->current->id > 0) {
+				reverse[idx--] = *list->current;
 				list->current = list->current->next;
 			}
-			ui_clear_and_print(state->ui, output);
+			for (int i = 0; i < list->count; ++i) {
+				snprintf(buff, sizeof(buff), "(%d) %s\n",
+					reverse[i].id, reverse[i].title);
+				if (strlen(buff) > w - 4) {
+					buff[w - 1] = '\0';
+					buff[w - 2] = '\n';
+					buff[w - 3] = '.';
+					buff[w - 4] = '.';
+					buff[w - 5] = '.';
+				}
+				ui_print_wrap(state->ui, buff);
+			}
+			free(reverse);
 			text_input_clear(state->command);
 			ui_print_command_prompt(state->ui, state->command, ">\0", " \0");
-			while (!*notes->prgSig) {
-				if (text_input_read(state, DKEY_RETURN) && text_input_get_len(state->command) > 0) {
-					int32_t num = strtoint32(text_input_get_buffer(state->command));
-					notes_select(notes, state, num);
-					break;
-				}
-			}
 		}
 		local_query_list_free(list);
 	} else

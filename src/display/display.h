@@ -1,6 +1,7 @@
 #ifndef LTTP_CLIENT_DISPLAY_H
 #define LTTP_CLIENT_DISPLAY_H
 
+#include <stdint.h>
 #if !defined(_WIN32) && !defined(_WIN64)
 #include <ncurses.h>
 //http://tldp.org/HOWTO/NCURSES-Programming-HOWTO/
@@ -22,6 +23,8 @@
 #else
 // TODO:  Make these work
 #include <stdio.h>
+#include <wchar.h>
+#include <uchar.h>
 #include <windows.h>
 #define ERR						-1
 #define DKEY_PAGE_UP			457
@@ -37,6 +40,7 @@
 #define DKEY_RETURN				13
 #define DKEY_DELETE				467
 #define DKEY_BACKSPACE			8
+#define DKEY_F2					60
 static inline HWND cmdwin() { return GetStdHandle(STD_OUTPUT_HANDLE); }
 static inline HWND cmdwinin() { return GetStdHandle(STD_INPUT_HANDLE); }
 #endif
