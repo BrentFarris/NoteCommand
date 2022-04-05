@@ -50,7 +50,9 @@ int main(int argc, char** argv) {
 			} else if (strcmp(text_input_get_buffer(state.command), "clear") == 0) {
 				ui_clear_and_print(state.ui, SPLASH "\n");
 				ui_print_command_prompt(state.ui, state.command, ">\0", " \0");
-			} else if (strcmp(text_input_get_buffer(state.command), "list") == 0) {
+			} else if (strcmp(text_input_get_buffer(state.command), "list") == 0
+				|| strcmp(text_input_get_buffer(state.command), "ls") == 0)
+			{
 				ui_clear_and_print(state.ui, "");
 				notes_list(notes, &state);
 			} else if (strcmp(text_input_get_buffer(state.command), "create") == 0
@@ -71,11 +73,13 @@ int main(int argc, char** argv) {
 					display_refresh();
 				}
 			} else if (stridxof(text_input_get_buffer(state.command), "find ", 0) == 0)
-				notes_search(notes, &state, text_input_get_buffer(state.command)+5);
+				notes_search(notes, &state, text_input_get_buffer(state.command) + 5);
 			else if (stridxof(text_input_get_buffer(state.command), "search ", 0) == 0)
-				notes_search(notes, &state, text_input_get_buffer(state.command)+7);
+				notes_search(notes, &state, text_input_get_buffer(state.command) + 7);
+			else if (stridxof(text_input_get_buffer(state.command), "import ", 0) == 0)
+				notes_import(notes, &state, text_input_get_buffer(state.command) + 7);
 			else if (stridxof(text_input_get_buffer(state.command), "delete ", 0) == 0) {
-				int id = strtoint32(text_input_get_buffer(state.command)+7);
+				int id = strtoint32(text_input_get_buffer(state.command) + 7);
 				notes_delete(notes, &state, id);
 			} else {
 				int id = strtoint32(text_input_get_buffer(state.command));

@@ -23,5 +23,6 @@ void notes_search(Notes* notes, InputState* state, const char* term);
 void notes_create(Notes* notes, InputState* state);
 void notes_edit(Notes* notes, InputState* state, int id);
 void notes_list(Notes* notes, InputState* state);
+void notes_import(Notes* notes, InputState* state, const char* file);
 
 #endif

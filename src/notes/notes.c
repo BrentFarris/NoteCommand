@@ -78,8 +78,10 @@ static inline int wite_note(Notes* notes, const char* title, const char* body) {
 	sqlite3_stmt* pStmt = NULL;
 	char* writeBody = body;
 	bool fromFile = stridxof(body, "file:", 0) == 0;
-	if (fromFile)
-		local_read_text_file(body + 5, &writeBody);
+	if (fromFile) {
+		if (local_read_text_file(body + 5, &writeBody) == 0)
+			return -1;
+	}
 	int err = sqlite3_prepare_v2(notes->db, INSERT_FORMAT, -1, &pStmt, NULL);
 	if (!err) {
 		sqlite3_bind_text(pStmt, 1, title, (int)strlen(title), NULL);
@@ -233,9 +235,12 @@ void notes_create(Notes* notes, InputState* state) {
 			while (!*notes->prgSig) {
 				if (text_input_read(state, DKEY_RETURN) && text_input_get_len(state->command) > 0) {
 					int err = wite_note(notes, title, text_input_get_buffer(state->command));
-					if (err)
-						ui_clear_and_print(state->ui, "There was an issue creating your note... please try again");
-					else
+					if (err) {
+						if (err == -1)
+							ui_clear_and_print(state->ui, "Could not locate the file to import... please try again");
+						else
+							ui_clear_and_print(state->ui, "There was an issue creating your note... please try again");
+					} else
 						ui_clear_and_print(state->ui, "Note created!");
 					break;
 				}
@@ -268,5 +273,31 @@ void notes_list(Notes* notes, InputState* state) {
 			local_notes_query_free(&q);
 		}
 		sqlite3_finalize(pStmt);
+	}
+}
+
+void notes_import(Notes* notes, InputState* state, const char* file) {
+	char* txt;
+	if (local_read_text_file(file, &txt) == 0) {
+		ui_clear_and_print(state->ui, "Failed to open the file to import");
+	} else {
+		int end = stridxof(txt, "\n", 0);
+		if (end == -1)
+			ui_clear_and_print(state->ui, "Invalid file format, expected the first line to be title, and the rest to be body");
+		else {
+			const char* title = txt;
+			const char* body = txt + end + 1;
+			txt[end] = '\0';
+			if (strlen(body) == 0)
+				ui_clear_and_print(state->ui, "Found a title, but did not find a body for the note");
+			else {
+				int err = wite_note(notes, title, body);
+				if (err)
+					ui_clear_and_print(state->ui, "Failed to create note, check permissions and try again...");
+				else
+					ui_clear_and_print(state->ui, "Note imported!");
+			}
+		}
+		free(txt);
 	}
 }
