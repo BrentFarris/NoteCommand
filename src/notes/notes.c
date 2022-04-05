@@ -20,6 +20,7 @@
 #define DELETE_FORMAT       "DELETE FROM `Notes` WHERE `rowid`=?"
 #define SAERCH_FORMAT       "SELECT `rowid`, * FROM `Notes` WHERE `title` MATCH ? OR `body` MATCH ? ORDER BY rank"
 #define INSERT_FORMAT       "INSERT INTO `Notes` (`title`, `body`) VALUES (?, ?)"
+#define LIST_FORMAT       "SELECT `rowid`, * FROM `Notes`"
 
 typedef struct NotesQueryNode NotesQueryNode;
 struct NotesQueryNode {
@@ -92,6 +93,20 @@ static inline int wite_note(Notes* notes, const char* title, const char* body) {
 	if (fromFile)
 		free(writeBody);
 	return err;
+}
+
+static void local_print_listing(char* buff, int buffSize,
+	NotesQueryNode* q, int w, InputState* state)
+{
+	snprintf(buff, buffSize, "(%d) %s\n", q->id, q->title);
+	if (strlen(buff) > w - 4) {
+		buff[w - 1] = '\0';
+		buff[w - 2] = '\n';
+		buff[w - 3] = '.';
+		buff[w - 4] = '.';
+		buff[w - 5] = '.';
+	}
+	ui_print_wrap(state->ui, buff);
 }
 
 Notes* notes_new(volatile const bool* const prgSig) {
@@ -187,25 +202,11 @@ void notes_search(Notes* notes, InputState* state, const char* term) {
 			display_get_rows_cols(&h, &w);
 			assert(sizeof(buff) >= w);
 			int idx = list->count - 1;
-			NotesQueryNode* reverse = malloc(sizeof(*reverse) * list->count);
 			ui_clear_and_print(state->ui, "Multiple entries found, pick an id...\n");
 			while (list->current != NULL && list->current->id > 0) {
-				reverse[idx--] = *list->current;
+				local_print_listing(buff, sizeof(buff), list->current, w, state);
 				list->current = list->current->next;
 			}
-			for (int i = 0; i < list->count; ++i) {
-				snprintf(buff, sizeof(buff), "(%d) %s\n",
-					reverse[i].id, reverse[i].title);
-				if (strlen(buff) > w - 4) {
-					buff[w - 1] = '\0';
-					buff[w - 2] = '\n';
-					buff[w - 3] = '.';
-					buff[w - 4] = '.';
-					buff[w - 5] = '.';
-				}
-				ui_print_wrap(state->ui, buff);
-			}
-			free(reverse);
 			text_input_clear(state->command);
 			ui_print_command_prompt(state->ui, state->command, ">\0", " \0");
 		}
@@ -251,5 +252,21 @@ void notes_edit(Notes* notes, InputState* state, int id) {
 }
 
 void notes_list(Notes* notes, InputState* state) {
-
+	sqlite3_stmt* pStmt = NULL;
+	int err = sqlite3_prepare_v2(notes->db, LIST_FORMAT, -1, &pStmt, NULL);
+	if (!err) {
+		char buff[512];
+		int w, h;
+		display_get_rows_cols(&h, &w);
+		assert(sizeof(buff) >= w);
+		while (sqlite3_step(pStmt) == SQLITE_ROW) {
+			NotesQueryNode q = { .id = 0, .title = NULL, .body = NULL, .next = NULL };
+			q.id = sqlite3_column_int(pStmt, 0);
+			strclone((const char*)sqlite3_column_text(pStmt, 1), &q.title);
+			strclone((const char*)sqlite3_column_text(pStmt, 2), &q.body);
+			local_print_listing(buff, sizeof(buff), &q, w, state);
+			local_notes_query_free(&q);
+		}
+		sqlite3_finalize(pStmt);
+	}
 }

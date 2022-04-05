@@ -31,6 +31,9 @@ int main(int argc, char** argv) {
 		if (text_input_read(&state, DKEY_RETURN) && text_input_get_len(state.command) > 0) {
 			if (strcmp(text_input_get_buffer(state.command), "exit") == 0) {
 				s_quit = true;
+			} else if (strcmp(text_input_get_buffer(state.command), "list") == 0) {
+				ui_clear_and_print(state.ui, "");
+				notes_list(notes, &state);
 			} else if (strcmp(text_input_get_buffer(state.command), "create") == 0
 				|| strcmp(text_input_get_buffer(state.command), "new") == 0)
 			{
