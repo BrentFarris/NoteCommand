@@ -18,6 +18,7 @@ typedef struct {
 Notes* notes_new(volatile const bool* prgSig);
 void notes_free(Notes* notes);
 void notes_select(Notes* notes, InputState* state, int32_t id);
+void notes_delete(Notes* notes, InputState* state, int32_t id);
 void notes_search(Notes* notes, InputState* state, const char* term);
 void notes_create(Notes* notes, InputState* state);
 void notes_edit(Notes* notes, InputState* state, int id);

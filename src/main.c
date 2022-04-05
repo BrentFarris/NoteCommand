@@ -52,7 +52,10 @@ int main(int argc, char** argv) {
 				notes_search(notes, &state, text_input_get_buffer(state.command)+5);
 			else if (stridxof(text_input_get_buffer(state.command), "search ", 0) == 0)
 				notes_search(notes, &state, text_input_get_buffer(state.command)+7);
-			else {
+			else if (stridxof(text_input_get_buffer(state.command), "delete ", 0) == 0) {
+				int id = strtoint32(text_input_get_buffer(state.command)+7);
+				notes_delete(notes, &state, id);
+			} else {
 				int id = strtoint32(text_input_get_buffer(state.command));
 				notes_select(notes, &state, id);
 			}

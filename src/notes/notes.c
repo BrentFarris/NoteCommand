@@ -17,6 +17,7 @@
 //https://www.sqlite.org/fts5.html
 #define CREATE_NOTES_TABLE  "CREATE VIRTUAL TABLE Notes USING fts5(title, body);"
 #define SELECT_FORMAT       "SELECT `rowid`, * FROM `Notes` WHERE `rowid`=?"
+#define DELETE_FORMAT       "DELETE FROM `Notes` WHERE `rowid`=?"
 #define SAERCH_FORMAT       "SELECT `rowid`, * FROM `Notes` WHERE `title` MATCH ? OR `body` MATCH ? ORDER BY rank"
 #define INSERT_FORMAT       "INSERT INTO `Notes` (`title`, `body`) VALUES (?, ?)"
 
@@ -33,6 +34,23 @@ typedef struct {
 	NotesQueryNode* current;
 	int count;
 } NotesQueryList;
+
+static inline size_t local_read_text_file(const char* path, char** outString) {
+	FILE* fp = NULL;
+	fopen_s(&fp, path, "r");
+	if (fp == NULL) {
+		*outString = NULL;
+		return 0;
+	}
+	fseek(fp, 0L, SEEK_END);
+	size_t length = ftell(fp) + 1;
+	rewind(fp);
+	*outString = (char*)calloc(1, length);
+	fread(*outString, length - 1, 1, fp);
+	fclose(fp);
+	//(*outString)[length - 1] = '\0';
+	return length;
+}
 
 static inline void local_notes_query_free(NotesQueryNode* query) {
 	free(query->title);
@@ -57,18 +75,23 @@ static inline int init(Notes* notes) {
 
 static inline int wite_note(Notes* notes, const char* title, const char* body) {
 	sqlite3_stmt* pStmt = NULL;
+	char* writeBody = body;
+	bool fromFile = stridxof(body, "file:", 0) == 0;
+	if (fromFile)
+		local_read_text_file(body + 5, &writeBody);
 	int err = sqlite3_prepare_v2(notes->db, INSERT_FORMAT, -1, &pStmt, NULL);
-	if (err)
-		return err;
-	else {
+	if (!err) {
 		sqlite3_bind_text(pStmt, 1, title, (int)strlen(title), NULL);
-		sqlite3_bind_text(pStmt, 2, body, (int)strlen(body), NULL);
+		sqlite3_bind_text(pStmt, 2, writeBody, (int)strlen(writeBody), NULL);
 		if (sqlite3_step(pStmt) != SQLITE_DONE) {
 			//sqlite3_errmsg
 			return -1;
 		}
-		return sqlite3_finalize(pStmt);
+		err = sqlite3_finalize(pStmt);
 	}
+	if (fromFile)
+		free(writeBody);
+	return err;
 }
 
 Notes* notes_new(volatile const bool* const prgSig) {
@@ -115,6 +138,20 @@ void notes_select(Notes* notes, InputState* state, int32_t id) {
 			ui_clear_and_print(state->ui, "Unable to locate the given note");
 		sqlite3_finalize(pStmt);
 	}
+}
+
+void notes_delete(Notes* notes, InputState* state, int32_t id) {
+	sqlite3_stmt* pStmt = NULL;
+	int err = sqlite3_prepare_v2(notes->db, DELETE_FORMAT, -1, &pStmt, NULL);
+	if (!err) {
+		sqlite3_bind_int(pStmt, 1, id);
+		if (sqlite3_step(pStmt) == SQLITE_DONE)
+			ui_clear_and_print(state->ui, "The note has been deleted");
+		else
+			ui_clear_and_print(state->ui, "Unable to locate the given note");
+		sqlite3_finalize(pStmt);
+	} else
+		ui_clear_and_print(state->ui, "Unable to locate the given note");
 }
 
 void notes_search(Notes* notes, InputState* state, const char* term) {
@@ -188,12 +225,12 @@ void notes_create(Notes* notes, InputState* state) {
 			char titleLbl[sizeof(title)+256];
 			snprintf(title, sizeof(title), "%s", text_input_get_buffer(state->command));
 			snprintf(titleLbl, sizeof(titleLbl),
-				"Title: %s\nNow write the body of your note (F2 to submit)...", title);
+				"Title: %s\nNow write the body of your note (file:path to import a text file)...", title);
 			ui_clear_and_print(state->ui, titleLbl);
 			text_input_clear(state->command);
 			ui_print_command_prompt(state->ui, state->command, ">\0", " \0");
 			while (!*notes->prgSig) {
-				if (text_input_read(state, DKEY_F2) && text_input_get_len(state->command) > 0) {
+				if (text_input_read(state, DKEY_RETURN) && text_input_get_len(state->command) > 0) {
 					int err = wite_note(notes, title, text_input_get_buffer(state->command));
 					if (err)
 						ui_clear_and_print(state->ui, "There was an issue creating your note... please try again");

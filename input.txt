@@ -1,0 +1,20 @@
+This is a test of inputting a file
+
+static inline size_t local_read_text_file(const char* path, char** outString) {
+	FILE* fp = NULL;
+	fopen_s(&fp, path, "r");
+	if (fp == NULL) {
+		*outString = NULL;
+		return 0;
+	}
+	fseek(fp, 0L, SEEK_END);
+	size_t length = ftell(fp) + 1;
+	rewind(fp);
+	*outString = (char*)calloc(1, length);
+	fread(*outString, length - 1, 1, fp);
+	fclose(fp);
+	//(*outString)[length - 1] = '\0';
+	return length;
+}
+
+and there is some code
